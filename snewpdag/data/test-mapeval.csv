@@ -5,13 +5,14 @@
 "SN-out","Pass","SN","'line':1, 'dump':1"
 ,,,,,
 "M27-SNOP-new","ops.NewTimeSeries","SN","'out_field':'timeseries','start':'2021-11-01 05:22:34'"
-"M27-SNOP-signal","gen.GenTimeDist","M27-SNOP-new","'field':'timeseries','sig_mean':250,'sig_t0':('truth','dets','SNOP','true_t'),'sig_filetype':'tng','sig_filename':'/home/tseng/dev/snews/numodels/ls220-s27.0co/neutrino_signal_nubar_e-LS220-s27.0co.data'"
+"M27-SNOP-signal","gen.GenTimeDist","M27-SNOP-new","'field':'timeseries','sig_mean':250,'sig_t0':('truth','dets','SNOP','true_t'),'sig_filetype':'tng','sig_filename':'/data/snoplus/tseng/numodels/ls220-s27.0co/neutrino_signal_nubar_e-LS220-s27.0co.data'"
 "M27-SNOP-hist","ops.TimeSeriesToTimeHist","M27-SNOP-signal","'in_field':'timeseries','out_field':'timeserieshist','start':'2021-11-01 05:22:34','duration':10,'nbins':100"
 "M27-SNOP-render","renderers.Hist1D","M27-SNOP-hist","'on':['alert'],'in_field':'timeserieshist','title':'M27 SNO+','xlabel':'t [s]','ylabel':'entries/10ms','filename':'output/mapeval-{}-{}-{}.png'"
-"SNOP-data","Write","M27-SNOP-signal","'on':['alert'],'write':(('detector','SNOP'),)"
+"SNOP-data","Write","M27-SNOP-hist","'on':['alert'],'write':(('detector','SNOP'),)"
+,,,,,"observe M27-SNOP-signal for time series, but M27-SNOP-hist for hist (for now)"
 ,,,,,
 "M27-IC-new","ops.NewTimeSeries","SN","'out_field':'timeseries','start':'2021-11-01 05:22:34'"
-"M27-IC-signal","gen.GenTimeDist","M27-IC-new","'field':'timeseries','sig_mean':660000,'sig_t0':('truth','dets','IC','true_t'),'sig_filetype':'tng','sig_filename':'/home/tseng/dev/snews/numodels/ls220-s27.0co/neutrino_signal_nubar_e-LS220-s27.0co.data'"
+"M27-IC-signal","gen.GenTimeDist","M27-IC-new","'field':'timeseries','sig_mean':660000,'sig_t0':('truth','dets','IC','true_t'),'sig_filetype':'tng','sig_filename':'/data/snoplus/tseng/numodels/ls220-s27.0co/neutrino_signal_nubar_e-LS220-s27.0co.data'"
 "M27-IC-hist","ops.TimeSeriesToTimeHist","M27-IC-signal","'in_field':'timeseries','out_field':'timeserieshist','start':'2021-11-01 05:22:34','duration':10,'nbins':100"
 "M27-IC-render","renderers.Hist1D","M27-IC-hist","'on':['alert'],'in_field':'timeserieshist','title':'M27 IceCube','xlabel':'t [s]','ylabel':'entries/10ms','filename':'output/mapeval-{}-{}-{}.png'"
 ,,,,,

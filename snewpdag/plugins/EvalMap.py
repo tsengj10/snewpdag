@@ -11,9 +11,12 @@ import logging
 import numpy as np
 import healpy as hp
 import scipy.special as sc
+from astropy.time import Time
 
 from snewpdag.dag import Node, CelestialPixels
 from snewpdag.dag import DetectorDB
+from snewpdag.values import TimeHist, TimeSeries
+from snewpdag.dag.lib import subtract_time
 
 class EvalMap(Node):
   def __init__(self, detector_location, nside, in_field, in_det_field, in_det_list_field, **kwargs):
@@ -24,7 +27,7 @@ class EvalMap(Node):
     self.in_det_field = in_det_field
     self.in_det_list_field = in_det_list_field
     self.cache = {} # { <det> : <TimeSeries or TimeHist> }
-    super().__init__(kwargs)
+    super().__init__(**kwargs)
 
   def reference_time(self):
     """
@@ -44,19 +47,18 @@ class EvalMap(Node):
     # Choose TimeHist with coarsest binning to set t=0
     # so we don't have to rebin it.
     # if there were no TimeHists, then we'll just use first (ic=0).
-    ic = 0
+    kc = 0
     max_width = 0.0
-    for i in range(nkeys):
-      k = keys[i]
+    for k in keys:
       v = self.cache[k]
       if isinstance(v, TimeHist):
         bin_width = v.duration / v.nbins # seconds
         if bin_width > max_width:
           max_width = bin_width
-          ic = i
+          kc = k
 
     # choose binning
-    v = self.cache[keys[ic]]
+    v = self.cache[kc]
     if max_width > 0.0:
       ref_nbins = v.nbins
       ref_duration = v.duration
@@ -74,8 +76,7 @@ class EvalMap(Node):
     sigs = []
     bgrs = [] # per bin
     areas = []
-    for i in range(nkeys):
-      k = keys[i]
+    for k in keys:
       v = self.cache[k]
       t0 = subtract_time(v.reference, (1,0))
       bg = v.integral(t0, v.reference) * ref_duration / ref_nbins
@@ -106,6 +107,7 @@ class EvalMap(Node):
 
   def reevaluate(self, data):
     # get directions to evaluate
+    logging.debug('{}: reevaluate'.format(self.name))
     t0 = self.reference_time()
     t0a = Time(t0, format='unix')
     cp = CelestialPixels()
@@ -115,18 +117,21 @@ class EvalMap(Node):
     keys = self.cache.keys()
     nkeys = len(keys)
     pd = np.zeros([nkeys,3])
-    for i in range(nkeys):
-      k = keys[i]
+    i = 0
+    for k in keys:
       det = self.db.get(k) # Detector object
       pd[i] = det.get_xyz(t0a) # GCRS coordinates at time [m]
+      i += 1
     tdet = pd @ rs / 3.0e8 # time offsets in s, rel to Earth center
     # shape of tdet should be (nkeys,npix)
+    logging.debug('{}: tdet shape {}'.format(self.name, tdet.shape))
 
     # get reference signal profile for each pixel's hypothetical direction
     m = np.zeros(self.npix)
     for i in range(self.npix):
       m[i] = self.compare(keys, tdet[i])
 
+    logging.debug('{}: map {}'.format(self.name, m))
     chi2_min = m.min()
     m -= chi2_min
     data['map'] = m
@@ -137,11 +142,13 @@ class EvalMap(Node):
     logging.debug('{}: alert'.format(self.name))
     if self.in_field in data:
       if self.in_det_field in data:
+        logging.debug('{}: found detector {}'.format(self.name, data[self.in_det_field]))
         self.cache[data[self.in_det_field]] = data[self.in_field]
         if self.in_det_list_field in data:
+          logging.debug('{}: cache {}, expect {}'.format(self.name, self.cache.keys(), data[self.in_det_list_field]))
           if set(self.cache.keys()) == set(data[self.in_det_list_field]):
             # evaluate skymap
-            return self.reevaluate(self, data)
+            return self.reevaluate(data)
     return False
 
   def revoke(self, data):
@@ -152,4 +159,12 @@ class EvalMap(Node):
         del self.cache[k]
         return True # force reevaluations downstream since there's a change
     return False
+
+  def reset(self, data):
+    logging.debug('{}: reset'.format(self.name))
+    if len(self.cache) > 0:
+      self.cache = {}
+      return True
+    else:
+      return False
 
