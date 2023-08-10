@@ -23,6 +23,18 @@ class TimeSeries:
              'times': [ t for t in self.times ],
            }
 
+  def granularity(self):
+    return 0.0 # this would be bin width if it was a histogram
+
+  def low_edge(self):
+    return np.min(self.times)
+
+  def is_empty(self):
+    return len(self.times) == 0
+
+  def event_count(self):
+    return len(self.times)
+
   def sort(self):
     """
     Sort the times

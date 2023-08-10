@@ -2,7 +2,7 @@
 GenTimeDist:  generates a time distribution on each alert, based on a histogram
 
 configuration:
-  field:     field name. Must be TimeSeries or TimeHist. Modified in place.
+  field:     field name. Must be TimeSeries or Hist1D. Modified in place.
   sig_mean:  mean number of events to generate.
              If it's a number, use the number itself.  Default is the
                area of the histogram read from the input spectrum.
@@ -19,6 +19,8 @@ configuration:
              and the number of events will match the first module to run.
   epoch_base (optional): starting time for epoch, float value or field specifier
     (string or tuple)
+  tnbins (optional): fixed number of bins in Hist1D. If =0 (default),
+    will take whatever Hist1D comes in the payload.
 
   A "field specifier" is either a string or tuple of strings
   which navigate into the payload.
@@ -52,6 +54,7 @@ class GenTimeDist(TimeDistSource):
     self.sig_smear = kwargs.pop('sig_smear', True)
     self.sig_once = kwargs.pop('sig_once', False)
     self.epoch_base = kwargs.pop('epoch_base', 0.0)
+    self.tnbins = kwargs.pop('tnbins', 0)
 
     if not isinstance(self.epoch_base, (numbers.Number, str, list, tuple)):
       logging.error('GenTimeDist.__init__: unrecognized epoch_base {}. Set to 0.'.format(self.epoch_base))
@@ -61,6 +64,11 @@ class GenTimeDist(TimeDistSource):
     self.area = np.sum(self.mu)
     self.mu_norm = self.mu / self.area
     self.tedges = np.append(self.t, self.thi) # append high end to t array
+
+    if self.tnbins > 0:
+      # pre-generate mean contents of bins
+      self.hmu = np.zeros(self.tnbins)
+      # do we need time limits?
 
     # pre-generate single series
     if self.sig_once and np.shape(GenTimeDist.one_series) == (0,):

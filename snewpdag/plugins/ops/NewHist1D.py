@@ -6,6 +6,9 @@ Arguments:
   nbins:  number of bins
   start:  float to indicate start time (if this was a time histogram)
   stop:  float to indicate stop time
+
+If start or stop are strings, interpret as time strings.
+If stop < start, interpret stop as a width in seconds.
 """
 import logging
 import numpy as np
@@ -23,6 +26,8 @@ class NewHist1D(Node):
     self.stop = stop
     if isinstance(self.stop, str):
       self.stop = Time(self.stop).to_value('unix', 'long')
+    elif self.stop < self.start:
+      self.stop = self.start + self.stop # interpret as width in seconds
     super().__init__(**kwargs)
 
   def alert(self, data):

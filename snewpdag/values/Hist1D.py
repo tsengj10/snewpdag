@@ -63,11 +63,23 @@ class Hist1D:
       logging.info('Hist1D.bin: index calc error {}'.format(sys.exc_info()))
       return None
 
+  def granularity(self):
+    return self.xwidth / self.nbins
+
+  def low_edge(self):
+    return self.xlow
+
+  def is_empty(self):
+    return self.count == 0
+
+  def event_count(self):
+    return self.count
+
   def bin_edge(self, index):
     """
     Return low edge of bin
     """
-    dx = self.width / len(self.bins)
+    dx = self.xwidth / len(self.bins)
     return self.xlow + index * dx
 
   def fill(self, x, weight=1.0):
@@ -111,13 +123,13 @@ class Hist1D:
     """
     x0 = self.xlow if xlow == None else xlow
     x1 = self.xhigh if xhigh == None else xhigh
-    js = self.bin_edge(np.linspace(x0, x1, num=nbins, endpoint=False))
-    m = (js >= 0) & (js < self.nbins)
-    ks = js[m]
+    js = np.int32((np.linspace(self.xlow, self.xhigh, num=self.nbins, endpoint=False) - x0) * nbins / (x1 - x0)) # indices
     h = np.zeros(nbins)
-    for i in range(len(ks)):
-      h[ks[i]] += self.bins[i]
-    return h
+    for i in range(self.nbins):
+      j = js[i]
+      if j >= 0 and j < nbins:
+        h[j] += self.bins[i]
+    return h, np.linspace(x0, x1, num=nbins)
 
   def integral(self, xlow=None, xhigh=None):
     """
@@ -129,7 +141,7 @@ class Hist1D:
     if x0 == self.xlow and x1 == self.xhigh:
       return np.sum(self.bins)
     else:
-      i0 = np.round((x0 - self.xlow) * self.nbins / self.xwidth)
-      i1 = np.round((x1 - self.xhigh) * self.nbins / self.xwidth)
+      i0 = np.int32(np.round((x0 - self.xlow) * self.nbins / self.xwidth))
+      i1 = np.int32(np.round((x1 - self.xlow) * self.nbins / self.xwidth))
       return np.sum(self.bins[i0:i1])
 

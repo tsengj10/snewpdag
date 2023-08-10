@@ -11,6 +11,8 @@ Arguments:
   lead_time:  start time relative to first event time of first time series
   fixed_ref:  default None, otherwise calculate all lags relative to
     identified detector
+  scan_dt:  default 0.0001s, step size for scanning logL
+  scan_dtmax:  default 0.050s, +- range for scanning logL
 
 lead_time should be -0.1s for signal-only, to make sure one always includes
 all of the signal.  When we can assume first event is background,
@@ -37,6 +39,8 @@ class XCovLag(Node):
     self.out_lags_field = out_lags_field
     self.lead_time = kwargs.pop('lead_time', -0.1) # 100ms before
     self.fixed_ref = kwargs.pop('fixed_ref', None)
+    self.scan_dt = kwargs.pop('scan_dt', 0.0001)
+    self.scan_dtmax = kwargs.pop('scan_dtmax', 0.05)
     self.cache = {} # { <det>: <TimeSeries> }
     self.last_burst_report = -1 # only forward one report per burst id
     super().__init__(**kwargs)
@@ -44,9 +48,14 @@ class XCovLag(Node):
   def xcov(self, k1, kref, dt):
     w1 = self.cache[k1]
     w2 = self.cache[kref]
+    gran = np.max([w1.granularity(), w2.granularity()])
+    st1 = w1.low_edge()
+    if gran > 0.0:
+      st1 = np.floor(st1 / gran) * gran
+    st1 = st1 + self.lead_time
     #st1 = np.min(w1.times) - dt
     #st2 = np.min(w2.times)
-    st1 = np.min(w1.times) + self.lead_time # 100ms lead time
+    #st1 = np.min(w1.times) + self.lead_time # 100ms lead time
     #st2 = np.min(w2.times)
     #st1 = w1.start - dt
     #st2 = w2.start
@@ -65,8 +74,8 @@ class XCovLag(Node):
     if k1 == kref:
       return (0.0, 0.0)
     # find best lag
-    hdt = 0.0001
-    dt = np.arange(-0.05, 0.05, hdt)
+    hdt = self.scan_dt
+    dt = np.arange(- self.scan_dtmax, self.scan_dtmax, hdt)
     #x = [ self.xcov(k1, kref, dt[i]) for i in range(len(dt)) ]
     #best = np.argmax(x)
     #logging.info('{}: best = {}, x = {}'.format(self.name, best, x))
