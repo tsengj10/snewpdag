@@ -93,6 +93,8 @@ class FirstEventDiff(Node):
     pull = (dev - self.true_lag) / rms
     pull_fudge = (dev - self.true_lag) / rms_fudge
 
+    dtf_true = dtf - self.true_lag # uncorrected diff - true
+
     # assemble output dictionary
     #d = { 'delta': dtf, 'exp_delta': dte, 'diff': dev, 'sigma_diff': rms, 'pull': pull }
     #logging.debug('{}:  diff = {}, sigma_diff = {}, pull = {}'.format(self.name, dev, rms, pull))
@@ -106,6 +108,7 @@ class FirstEventDiff(Node):
                           'delta': dtf, # not needed by DiffPointing
                           'exp_delta': dte, # not needed by DiffPointing
                           'dt_true': dt_true, # not needed by DiffPointing
+                          'dtf_true': dtf_true, # not needed by DiffPointing
                           'pull': pull, # not needed by DiffPointing
                           'var1': et1sq - et1*et1, # not needed by DiffPointing
                           'var2': et2sq - et2*et2, # not needed by DiffPointing
