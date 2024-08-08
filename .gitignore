@@ -4,4 +4,5 @@
 **.log
 output/**
 jobs/**
+venv/**
 SNEWS_ALERTS/**

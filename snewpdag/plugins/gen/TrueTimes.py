@@ -16,7 +16,9 @@ Input:
 Output:
   truth/true_sn_ra: right ascension (radians)
   truth/true_sn_dec: declination (radians)
+  truth/true_t0: arrival time at center, (float) seconds in snewpdag time
   truth/dets/<det_id>/true_t: arrival time, (float) seconds in snewpdag time
+  truth/dets/<det_id>/true_dt: relative time to true_t0, (float) seconds
 """
 import logging
 import numbers
@@ -66,6 +68,7 @@ class TrueTimes(Node):
     elif isinstance(self.epoch_base, (str, list, tuple)):
       t0 = fetch_field(data, self.epoch_base)
     time_base = self.time_unix - t0
+    data['truth']['true_t0'] = time_base
 
     # generate true times for each detector.
     # given time is when wavefront arrives at Earth origin.
@@ -77,9 +80,11 @@ class TrueTimes(Node):
       logging.info('pos[{}] = {}'.format(dname, pos))
       logging.info('  sn pos = {}'.format(self.snr))
       dt = - np.dot(det.get_xyz(self.time), self.snr) / const.c # intersect
-      t1 = time_base + dt.to(u.s).value
+      dts = dt.to(u.s).value
+      t1 = time_base + dts
       ts[dname] = {
                     'true_t': t1, # s in snewpdag time
+                    'true_dt': dts, # sec relative to base (in true_t0)
                   }
 
     data['truth']['dets'] = ts

@@ -10,8 +10,11 @@ Arguments:
       diff = delta - exp_delta (yield bias-corrected delta)
       sigma_diff = expected uncertainty on diff
   true_lag = true lag value (optional)
+  true_t1 = true arrival time for detector 1 (optional)
+  true_t2 = true arrival time for detector 2 (optional)
 """
 import logging
+import numbers
 import numpy as np
 
 from snewpdag.dag import Node
@@ -22,7 +25,11 @@ class FirstEventDiff(Node):
     self.in_series1_field = in_series1_field
     self.in_series2_field = in_series2_field
     self.out_field = out_field
+    self.in_ref_field = kwargs.pop('in_ref_field', in_series1_field)
     self.true_lag = kwargs.pop('true_lag', 0.0)
+    self.true_t1 = kwargs.pop('true_t1', 0.0)
+    self.true_t2 = kwargs.pop('true_t2', 0.0)
+    self.true_tr = kwargs.pop('true_tr', self.true_t1)
     self.out_key = kwargs.pop('out_key', ('D1','D2')) # usually names the detectors
     self.sigma_fudge = kwargs.pop('sigma_fudge', 1.0) # scale up sigma
     super().__init__(**kwargs)
@@ -34,6 +41,9 @@ class FirstEventDiff(Node):
     tsr2, valid = fetch_field(data, self.in_series2_field) # TimeSeries
     if not valid:
       return False
+    tsref, valid = fetch_field(data, self.in_ref_field) # TimeSeries
+    if not valid:
+      return False
 
     # difference between first times
     tf1 = np.min(tsr1.times)
@@ -41,24 +51,33 @@ class FirstEventDiff(Node):
     dtf = tf1 - tf2
 
     # subtract off one of the first times
-    base = tf1 if tf1 < tf2 else tf2
+    #base = tf1 if tf1 < tf2 else tf2
+    base = np.min([ tf1, tf2, np.min(tsref.times) ])
     ts1 = tsr1.times - base
     ts2 = tsr2.times - base
+    tsr = tsref.times - base
     #tf1 = tf1 - base
     #tf2 = tf2 - base
 
     # expected value of delta
     # note that aside from alpha, this only depends on first series
-    alpha = len(ts2) / len(ts1)
+    alpha1 = len(ts1) / len(tsr)
+    alpha2 = len(ts2) / len(tsr)
     s1 = np.sort(ts1)
     s2 = np.sort(ts2)
+    sr = np.sort(tsr)
+    ikr = np.arange(1.0, len(sr) + 1.0)
+    e1 = np.exp(-alpha1*ikr)
+    et1 = np.sum(e1 * sr) / np.sum(e1) # exp val of t1
+    et1sq = np.sum(e1 * sr * sr) / np.sum(e1)
+    e1a = np.exp(-alpha2*ikr)
+    et1a = np.sum(e1a * sr) / np.sum(e1a) # exp val of t1 with different yield
+    et1asq = np.sum(e1a * sr * sr) / np.sum(e1a)
+
     ik1 = np.arange(1.0, len(s1) + 1.0)
-    e1 = np.exp(-ik1)
-    et1 = np.sum(e1 * s1) / np.sum(e1) # exp val of t1
-    et1sq = np.sum(e1 * s1 * s1) / np.sum(e1)
-    e1a = np.exp(-alpha*ik1)
-    et1a = np.sum(e1a * s1) / np.sum(e1a) # exp val of t1 with different yield
-    et1asq = np.sum(e1a * s1 * s1) / np.sum(e1a)
+    e1_noa = np.exp(-ik1)
+    et1_noa = np.sum(e1_noa * s1) / np.sum(e1_noa)
+    et1sq_noa = np.sum(e1_noa * s1 * s1) / np.sum(e1_noa)
 
     ik2 = np.arange(1.0, len(s2) + 1.0)
     e2 = np.exp(-ik2)
@@ -70,13 +89,19 @@ class FirstEventDiff(Node):
     # deviation (diff - expected diff)
     dev = dtf - dte
     logging.debug('{}: dtf = {}, dte = {}, dev = {}'.format(self.name, dtf, dte, dev))
+    logging.debug('{}: s1({}) = {}'.format(self.name, len(s1), s1[:5]))
+    logging.debug('{}: s2({}) = {}'.format(self.name, len(s2), s2[:5]))
+    logging.debug('{}: sr({}) = {}'.format(self.name, len(sr), sr[:5]))
 
     # uncertainty estimate
     #sigma2 = et1sq + et2sq - et1*et1 - et2*et2
     var1 = et1sq - et1*et1
     var2 = et2sq - et2*et2
     var1a = et1asq - et1a*et1a
+    var1_noa = et1sq_noa - et1_noa*et1_noa
     # choose the larger variance between 2 and 1a
+    if var1_noa > var1: # larger variance between 1 and 1_noa
+      var1 = var1_noa
     if var1a > var2:
       sigma2 = var1 + var1a
       var2 = var1a
@@ -94,6 +119,24 @@ class FirstEventDiff(Node):
     pull_fudge = (dev - self.true_lag) / rms_fudge
 
     dtf_true = dtf - self.true_lag # uncorrected diff - true
+
+    true_t1 = 0.0
+    true_t2 = 0.0
+    true_tref = 0.0
+    if isinstance(self.true_t1, numbers.Number):
+      true_t1 = self.true_t1
+    elif isinstance(self.true_t1, (str, list, tuple)):
+      true_t1, valid = fetch_field(data, self.true_t1)
+    if isinstance(self.true_t2, numbers.Number):
+      true_t2 = self.true_t2
+    elif isinstance(self.true_t2, (str, list, tuple)):
+      true_t2, valid = fetch_field(data, self.true_t2)
+    if isinstance(self.true_tr, numbers.Number):
+      true_tref = self.true_tr
+    elif isinstance(self.true_tr, (str, list, tuple)):
+      true_tref, valid = fetch_field(data, self.true_tr)
+    logging.debug('{}: tf1 = {}, tf2 = {}'.format(self.name, tf1, tf2))
+    logging.debug('{}: true_t1 = {}, true_t2 = {}, true_tref = {}'.format(self.name, true_t1, true_t2, true_tref))
 
     # assemble output dictionary
     #d = { 'delta': dtf, 'exp_delta': dte, 'diff': dev, 'sigma_diff': rms, 'pull': pull }
@@ -113,12 +156,17 @@ class FirstEventDiff(Node):
                           'var1': et1sq - et1*et1, # not needed by DiffPointing
                           'var2': et2sq - et2*et2, # not needed by DiffPointing
                           'var1a': et1asq - et1a*et1a, # not needed by DiffPointing
+                          'var1_noa': et1sq_noa - et1_noa*et1_noa, # not needed by DiffPointing
                           'rms': rms, # not needed by DiffPointing
                           'pull_fudge': pull_fudge, # not for DP, incl fudge
                           'rms_fudge': rms_fudge, # not for DP, incl fudge
                           'dt': dev,
-                          't1': tf1 - et1, # individual bias corrected estimate of first event time
-                          't2': tf2 - et1a,
+                          #'t1': tf1 - et1, # individual bias corrected estimate of first event time
+                          #'t2': tf2 - et1a,
+                          'ts1_noa': et1_noa + base - true_t1, # not for DP
+                          'ts2_noa': et2 + base - true_t2,
+                          'ts1': et1 + base - true_tref,
+                          'ts2': et1a + base - true_tref,
                           'bias': 0.0,
                           'var': sigma2 * self.sigma_fudge * self.sigma_fudge,
                           'dsig1': np.sqrt(var1) * self.sigma_fudge,
