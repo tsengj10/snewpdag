@@ -1,10 +1,12 @@
 """
-DiffPointing: generate a skymap of SN direction chi2's
+DiffSingle: calculate chi2 for an SN direction based on dt's
   based on Wiktor Jasniak's Chi2Calculation
 
 Arguments:
   detector_location: filename of detector database for DetectorDB
   nside: healpix nside parameter, i.e., skymap resolution
+  ipix: direction pixel number (take center of pixel)
+  iside: direction pixel nside
   min_dts: minimum number of time differences in order to do calculation
   dt_field_name: default time difference field, default 'dt'
 
@@ -23,23 +25,27 @@ Input payload:
       dsig2: (d(dt)/dt2) * sigma2, in seconds, for covariance calculation.
 
 Output payload:
-  map: healpix map with specified nside, nested ordering.
-  ndof: 2
-  map_zeroes: indices of bins with 0 value (min chi2)
+  ndt:  number of time differences used
+  chi2:  chi-square evaluated at ipix
+  cls:  array of CL's evaluated for ndof = ndt, ndt-1, ndt-2
 """
 import sys
 import logging
 import numpy as np
 import healpy as hp
+from scipy.stats import chi2
 
 from snewpdag.dag import Node, Detector, DetectorDB, CelestialPixels
 from astropy import units as u
 from astropy.time import Time
 
-class DiffPointing(Node):
-  def __init__(self, detector_location, nside, min_dts, **kwargs):
+class DiffSingle(Node):
+  def __init__(self, detector_location, nside, iside, ipix, min_dts, **kwargs):
     self.db = DetectorDB(detector_location)
     self.nside = nside
+    (ra, dec) = hp.pix2ang(iside, ipix, nest=True, lonlat=True)
+    self.pixel = hp.ang2pix(nside, ra, dec, nest=True, lonlat=True)
+    logging.info('DiffSingle monitor pixel ({}, {}) -> ({}, {})'.format(iside, ipix, nside, self.pixel))
     self.npix = hp.nside2npix(nside)
     self.min_dts = min_dts
     self.dt_field_name = kwargs.pop('dt_field_name', 'dt')
@@ -192,7 +198,8 @@ class DiffPointing(Node):
     ## xyz is an array of (x,y,z) unit vectors
     #rs = np.stack( (xyz.x, xyz.y, xyz.z) ) # shape (3,npix)
     cp = CelestialPixels()
-    rs = cp.get_map(self.nside, t0, self.frame)
+    all_rs = cp.get_map(self.nside, t0, self.frame) # shape (3,npix)
+    rs = all_rs[:,self.pixel] # shape (3,)
 
     # the following was used when we assumed skymap was in GCRS
     #rs = hp.pixelfunc.pix2vec(self.nside, range(self.npix), nest=True)
@@ -200,16 +207,15 @@ class DiffPointing(Node):
     # however, it'll be returned in shape (3,npix)
     d = self.d_vectors(keys, rs) # returns shape (npix,nkeys)
     dw = d @ w # returns shape (npix,nkeys)
-    m = np.zeros(self.npix)
-    for i in range(self.npix):
-      m[i] = np.dot(dw[i], d[i])
+    chisq = np.dot(dw, d)
+    ndt = len(self.cache)
 
-    chi2_min = m.min()
-    m -= chi2_min
-    data['map'] = m
-    data['ndof'] = 2
-    data['map_zeroes'] = np.flatnonzero(m == 0.0)
-    logging.info('{}: chi2={}, chi2_min={}'.format(self.name, m[1125]+chi2_min, chi2_min))
+    data['chi2'] = chisq
+    data['ndt'] = ndt
+    data['cls'] = (chi2.cdf(chisq, df=ndt), \
+                   chi2.cdf(chisq, df=ndt-1), \
+                   chi2.cdf(chisq, df=ndt-2))
+    logging.info('{}:     chi2={}, cdf={}'.format(self.name, chisq, chi2.cdf(chisq, df=ndt)))
     return data
 
   def alert(self, data):

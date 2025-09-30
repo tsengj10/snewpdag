@@ -35,14 +35,21 @@ class Chi2CL(Node):
       #v = m - base
       v = np.array(data[self.in_field])
       c = chi2.cdf(v, df=data[self.in_ndof_field])
+      logging.info('{}: cdf={}'.format(self.name, c[1125]))
       data[self.out_field] = 1.0 - c
       logging.info('chi2 range ({}, {}), ndof = {}'.format(np.min(v), np.max(v), data[self.in_ndof_field]))
       if self.out_area_field != '':
         to_deg2 = 360*360/(np.pi*len(c))
+        area1 = np.sum(c < 0.682689492137)
+        area90 = np.sum(c < 0.9)
+        area95 = np.sum(c < 0.95)
         data[self.out_area_field] = {
-            '1sigma': np.sum(c < 0.682689492137) * to_deg2,
-            '90cl': np.sum(c < 0.9) * to_deg2,
-            '95cl': np.sum(c < 0.95) * to_deg2,
+            '1sigma': area1 * to_deg2,
+            '90cl': area90 * to_deg2,
+            '95cl': area95 * to_deg2,
+            'npix_1sigma': area1,
+            'npix_90cl': area90,
+            'npix_95cl': area95,
             }
       return data
     else:

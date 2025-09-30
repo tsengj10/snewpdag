@@ -8,6 +8,7 @@ Constructor arguments:
   xhigh: high edge of histogram
   in_field: input field specifier
   out_field: output field
+  index_field (optional): index specifier for input
 
 Output json:
   alert:  no output
@@ -28,17 +29,24 @@ class FillHist1D(Node):
     self.hist = Hist1D(nbins, xlow, xhigh)
     self.in_field = in_field
     self.out_field = out_field
+    self.index_field = kwargs.pop('index_field', '')
     super().__init__(**kwargs)
 
   def clear(self):
     self.hist.clear()
 
   def alert(self, data):
-    v, flag = fetch_field(data, self.in_field)
+    s = self.in_field if len(self.index_field) == 0 else list(self.in_field)
+    if len(self.index_field) != 0:
+      v, flag = fetch_field(data, self.index_field)
+      if not flag:
+        logging.error('{}: index field {} not found'.format(self.name, self.index_field))
+        return False
+      s.append(v)
+    v, flag = fetch_field(data, s)
     if not flag:
-      logging.error('{}: field {} not found'.format(self.name, self.in_field))
+      logging.error('{}: field {} not found'.format(self.name, s))
       return False
-      return
     self.hist.fill(v)
     return False # don't forward an alert
 
