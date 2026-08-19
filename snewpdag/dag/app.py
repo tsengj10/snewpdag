@@ -83,7 +83,8 @@ def run():
 
   # initialize random number generator
   if args.seed:
-    Node.rng = np.random.default_rng(int(args.seed))
+    base_seed = 0x8c3c010cb4754c905776bdac5ee7501 # from numpy doc
+    Node.rng = np.random.default_rng([int(args.seed), base_seed])
   else:
     Node.rng = np.random.default_rng()
 

@@ -26,7 +26,7 @@ class CelestialPixels:
   def list_maps(self):
     return CelestialPixels.maps.keys()
 
-  def get_map(self, nside, time):
+  def get_map(self, nside, time, frame_id='icrs'):
     """
     Get an array of unit vectors pointing to ICRS skymap pixel centers.
     Arrays are keyed with nside and time.
@@ -35,7 +35,7 @@ class CelestialPixels:
     time = Unix timestamp.  Only kept at second granularity.
     """
     time_tag = int(time)
-    tag = (nside, time_tag)
+    tag = (nside, time_tag, frame_id)
     if tag in CelestialPixels.maps:
       return CelestialPixels.maps[tag]
 
@@ -45,7 +45,7 @@ class CelestialPixels:
     # pixel centers in ICRS coordinates.
     # c will an array of lon,lat with shape (2,npix).
     c = hp.pixelfunc.pix2ang(nside, range(npix), nest=True, lonlat=True)
-    sc = SkyCoord(ra=c[0], dec=c[1], unit=u.deg, frame='icrs', \
+    sc = SkyCoord(ra=c[0], dec=c[1], unit=u.deg, frame=frame_id, \
                   representation_type='unitspherical', obstime=t)
     gc = sc.transform_to(GCRS)
     # gc is now an array of SkyCoord, but in (ra,dec) in GCRS
@@ -56,9 +56,9 @@ class CelestialPixels:
     CelestialPixels.maps[tag] = rs
     return rs
 
-  def delete_map(self, nside, time):
+  def delete_map(self, nside, time, frame_id):
     time_tag = int(time)
-    tag = (nside, time_tag)
+    tag = (nside, time_tag, frame_id)
     if tag in CelestialPixels.maps:
       del CelestialPixels.maps[tag]
 

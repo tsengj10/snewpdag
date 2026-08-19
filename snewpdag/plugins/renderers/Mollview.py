@@ -71,14 +71,30 @@ class Mollview(Node):
                   nest=True,
                   **kwargs,
                  )
+      ra, exists1 = fetch_field(data, ('truth','true_sn_ra'))
+      dec, exists2 = fetch_field(data, ('truth','true_sn_dec'))
+      if exists1:
+        ra_d = np.degrees(ra)
+      if exists2:
+        dec_d = np.degrees(dec)
+      if exists1 and exists2:
+        hp.projplot(ra_d, dec_d, 'c*', ms=15, lonlat=True)
       hp.graticule()
       plt.savefig(fname)
       plt.close()
 
       if make_script:
+        nside, exists3 = fetch_field(data, ('truth','true_sn_nside'))
+        pixel, exists4 = fetch_field(data, ('truth','true_sn_pixel'))
+        if exists1 and exists2 and exists3 and exists4:
+          mside = hp.npix2nside(len(m))
+          mpixel = np.argmax(m)
+          sfile.write('# True (ra,dec)=({}, {}), (nside,ipix)=({}, {}), max (nside,ipix)=({}, {})\n'.format(ra_d, dec_d, nside, pixel, mside, mpixel))
         sfile.write('kwargs = {}\n'.format(kwargs))
         sfile.write('m = np.array({})\n'.format(m.tolist()))
         sfile.write("hp.mollview(m, coord={}, title='{}', unit='{}', nest=True, **kwargs)\n".format(self.coord, self.title, self.units))
+        if exists1 and exists2:
+          sfile.write("hp.projplot({}, {}, 'c*', ms=15, lonlat=True)\n".format(ra_d, dec_d))
         sfile.write('hp.graticule()\n')
         sfile.write('plt.show()\n')
         sfile.close()
